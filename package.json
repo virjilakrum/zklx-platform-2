@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@wormhole-foundation/sdk": "^0.8.2",
+    "@wormhole-foundation/sdk-base": "^0.8.2",
+    "@wormhole-foundation/sdk-definitions": "^0.8.2",
+    "@wormhole-foundation/sdk-evm": "^0.8.2",
+    "@wormhole-foundation/sdk-evm-tokenbridge": "^0.8.2",
+    "ipfs-http-client": "^60.0.1"
+  }
+}
