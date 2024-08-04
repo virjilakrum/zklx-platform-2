@@ -3,82 +3,93 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract MyFileBridge is Ownable {
+contract FileRegistry is Ownable {
     struct FileInfo {
         string arweaveHash;
-        string fileName;
-        uint256 fileSize;
-        string fileType;
         address uploader;
-        uint256 uploadTime;
+        address[] authorizedViewers;
     }
 
     mapping(bytes32 => FileInfo) public files;
-    mapping(address => bool) public authorizedUploaders;
-    uint256 public uploadFee;
 
-    event FileUploaded(
+    event FileHashRegistered(
         bytes32 indexed fileId,
         string arweaveHash,
-        string fileName,
-        uint256 fileSize,
-        string fileType,
-        address uploader
+        address indexed uploader
     );
+    event ViewerAuthorized(bytes32 indexed fileId, address indexed viewer);
+    event ViewerRevoked(bytes32 indexed fileId, address indexed viewer);
 
-    constructor(uint256 _uploadFee) {
-        uploadFee = _uploadFee;
-    }
-
-    modifier onlyAuthorized() {
+    modifier onlyUploaderOrOwner(bytes32 fileId) {
         require(
-            authorizedUploaders[msg.sender] || owner() == msg.sender,
+            msg.sender == files[fileId].uploader || msg.sender == owner(),
             "Not authorized"
         );
         _;
     }
 
-    function setAuthorizedUploader(
-        address uploader,
-        bool authorized
-    ) external onlyOwner {
-        authorizedUploaders[uploader] = authorized;
-    }
-
-    function setUploadFee(uint256 fee) external onlyOwner {
-        uploadFee = fee;
-    }
-
-    function uploadFile(
+    function registerFile(
         bytes32 fileId,
-        string calldata arweaveHash,
-        string calldata fileName,
-        uint256 fileSize,
-        string calldata fileType
-    ) external payable onlyAuthorized {
-        require(msg.value >= uploadFee, "Insufficient fee");
-        require(files[fileId].uploadTime == 0, "File already exists");
+        string calldata arweaveHash
+    ) external {
+        require(
+            files[fileId].uploader == address(0),
+            "File already registered"
+        );
 
         files[fileId] = FileInfo({
             arweaveHash: arweaveHash,
-            fileName: fileName,
-            fileSize: fileSize,
-            fileType: fileType,
             uploader: msg.sender,
-            uploadTime: block.timestamp
+            authorizedViewers: new address
         });
 
-        emit FileUploaded(
-            fileId,
-            arweaveHash,
-            fileName,
-            fileSize,
-            fileType,
-            msg.sender
-        );
+        emit FileHashRegistered(fileId, arweaveHash, msg.sender);
     }
 
-    function withdraw() external onlyOwner {
-        payable(owner()).transfer(address(this).balance);
+    function authorizeViewer(
+        bytes32 fileId,
+        address viewer
+    ) external onlyUploaderOrOwner(fileId) {
+        files[fileId].authorizedViewers.push(viewer);
+        emit ViewerAuthorized(fileId, viewer);
+    }
+
+    function revokeViewer(
+        bytes32 fileId,
+        address viewer
+    ) external onlyUploaderOrOwner(fileId) {
+        uint256 viewerCount = files[fileId].authorizedViewers.length;
+        for (uint256 i = 0; i < viewerCount; i++) {
+            if (files[fileId].authorizedViewers[i] == viewer) {
+                files[fileId].authorizedViewers[i] = files[fileId]
+                    .authorizedViewers[viewerCount - 1];
+                files[fileId].authorizedViewers.pop();
+                emit ViewerRevoked(fileId, viewer);
+                break;
+            }
+        }
+    }
+
+    function getAuthorizedViewers(
+        bytes32 fileId
+    ) external view returns (address[] memory) {
+        return files[fileId].authorizedViewers;
+    }
+
+    function isViewerAuthorized(
+        bytes32 fileId,
+        address viewer
+    ) external view returns (bool) {
+        for (uint256 i = 0; i < files[fileId].authorizedViewers.length; i++) {
+            if (files[fileId].authorizedViewers[i] == viewer) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getFileHash(bytes32 fileId) external view returns (string memory) {
+        require(isViewerAuthorized(fileId, msg.sender), "Not authorized");
+        return files[fileId].arweaveHash;
     }
 }
