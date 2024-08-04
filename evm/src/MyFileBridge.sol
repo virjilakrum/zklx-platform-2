@@ -5,9 +5,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract FileRegistry is Ownable {
     struct FileInfo {
-        string arweaveHash;
-        address uploader;
-        address[] authorizedViewers;
+        string arweaveHash; // Arweave'de depolanan dosyanın hash'i
+        address uploader; // Dosyayı yükleyen Ethereum adresi
+        mapping(address => bool) authorizedViewers; // İzin verilen görüntüleyenlerin listesi
+        uint256 viewerCount; // İzin verilen görüntüleyen sayısı (optimizasyon için)
     }
 
     mapping(bytes32 => FileInfo) public files;
@@ -37,11 +38,9 @@ contract FileRegistry is Ownable {
             "File already registered"
         );
 
-        files[fileId] = FileInfo({
-            arweaveHash: arweaveHash,
-            uploader: msg.sender,
-            authorizedViewers: new address
-        });
+        files[fileId].arweaveHash = arweaveHash;
+        files[fileId].uploader = msg.sender;
+        files[fileId].viewerCount = 0; // Başlangıçta görüntüleyen yok
 
         emit FileHashRegistered(fileId, arweaveHash, msg.sender);
     }
@@ -50,7 +49,14 @@ contract FileRegistry is Ownable {
         bytes32 fileId,
         address viewer
     ) external onlyUploaderOrOwner(fileId) {
-        files[fileId].authorizedViewers.push(viewer);
+        require(
+            !files[fileId].authorizedViewers[viewer],
+            "Viewer already authorized"
+        );
+
+        files[fileId].authorizedViewers[viewer] = true;
+        files[fileId].viewerCount++;
+
         emit ViewerAuthorized(fileId, viewer);
     }
 
@@ -58,34 +64,25 @@ contract FileRegistry is Ownable {
         bytes32 fileId,
         address viewer
     ) external onlyUploaderOrOwner(fileId) {
-        uint256 viewerCount = files[fileId].authorizedViewers.length;
-        for (uint256 i = 0; i < viewerCount; i++) {
-            if (files[fileId].authorizedViewers[i] == viewer) {
-                files[fileId].authorizedViewers[i] = files[fileId]
-                    .authorizedViewers[viewerCount - 1];
-                files[fileId].authorizedViewers.pop();
-                emit ViewerRevoked(fileId, viewer);
-                break;
-            }
-        }
+        require(
+            files[fileId].authorizedViewers[viewer],
+            "Viewer not authorized"
+        );
+
+        files[fileId].authorizedViewers[viewer] = false;
+        files[fileId].viewerCount--;
+
+        emit ViewerRevoked(fileId, viewer);
     }
 
-    function getAuthorizedViewers(
-        bytes32 fileId
-    ) external view returns (address[] memory) {
-        return files[fileId].authorizedViewers;
-    }
+    // Gas optimizasyonu için izin verilen görüntüleyenlerin listesini döndürmez.
+    // Bunun yerine, görüntüleyenlerin tek tek kontrol edilir.
 
     function isViewerAuthorized(
         bytes32 fileId,
         address viewer
-    ) external view returns (bool) {
-        for (uint256 i = 0; i < files[fileId].authorizedViewers.length; i++) {
-            if (files[fileId].authorizedViewers[i] == viewer) {
-                return true;
-            }
-        }
-        return false;
+    ) public view returns (bool) {
+        return files[fileId].authorizedViewers[viewer];
     }
 
     function getFileHash(bytes32 fileId) external view returns (string memory) {
