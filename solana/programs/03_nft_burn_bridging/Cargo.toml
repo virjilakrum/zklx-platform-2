@@ -1,0 +1,26 @@
+[package]
+name = "nft-burn-bridging"
+version = "0.1.0"
+description = "03 - NFT Burn Bridging"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "nft_burn_bridging"
+
+[features]
+default = ["mainnet"]
+mainnet = ["wormhole-anchor-sdk/mainnet"]
+testnet = ["wormhole-anchor-sdk/solana-devnet"]
+devnet = ["wormhole-anchor-sdk/tilt-devnet"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+
+[dependencies]
+solana-program = "1.18.17"
+anchor-lang = { version = "0.30.1", features=["init-if-needed"]}
+anchor-spl = { version = "0.30.1", features = ["metadata"] }
+mpl-token-metadata = { version = "4" }
+wormhole-anchor-sdk = { path = "../../modules/wormhole-anchor-sdk", default-features = false }
